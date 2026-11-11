@@ -1,0 +1,724 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>2D 光學成像模擬器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+  /* 版面：左側控制欄 + 右側方格紙光具座；成像結果用顏色與字母標示，紙屏投影以浮動視窗呈現 */
+  :root {
+    --bg: #edf1f4; --panel: #ffffff; --panel-2: #e2e9ee;
+    --ink: #13202b; --muted: #566878; --line: #d0dae2;
+    --accent: #0b6e99; --accent-soft: #d9edf6;
+    --cv-bg: #fbfcfd; --cv-grid: #e7edf1; --cv-axis: #8999a6; --cv-mark: #4f5f6b;
+    --cv-glass: rgba(54, 150, 206, .18); --cv-edge: #27384a;
+    --cv-screen: rgba(96, 110, 190, .16); --cv-screen-edge: #667789;
+    --ray: #df820a; --obj: #d81b60;
+    --st-out: #1769c9; --st-2f: #d81b60; --st-mid: #8a2ca6; --st-in: #23913a; --st-f: #e0342f;
+    --warn: #d33a2c;
+    --paper: #fdfdfb; --paper-line: #dde2e6; --paper-bar: rgba(236, 240, 243, .94);
+    --shadow: 0 8px 24px rgba(10, 20, 30, .22);
+    --font-ui: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-num: "IBM Plex Mono", "Noto Sans TC", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1318; --panel: #151e26; --panel-2: #1e2a34;
+      --ink: #e6edf3; --muted: #93a4b2; --line: #29363f;
+      --accent: #5ec1ea; --accent-soft: #163341;
+      --cv-bg: #101920; --cv-grid: #19232c; --cv-axis: #667886; --cv-mark: #a5b4c0;
+      --cv-glass: rgba(90, 180, 240, .16); --cv-edge: #b9c7d2;
+      --cv-screen: rgba(140, 150, 230, .16); --cv-screen-edge: #8798a8;
+      --ray: #ffa22e; --obj: #ff5c93;
+      --st-out: #5aa8ff; --st-2f: #ff5c93; --st-mid: #cf82ea; --st-in: #5ccf72; --st-f: #ff6b63;
+      --warn: #ff7a6e;
+      --shadow: 0 8px 24px rgba(0, 0, 0, .5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1318; --panel: #151e26; --panel-2: #1e2a34;
+    --ink: #e6edf3; --muted: #93a4b2; --line: #29363f;
+    --accent: #5ec1ea; --accent-soft: #163341;
+    --cv-bg: #101920; --cv-grid: #19232c; --cv-axis: #667886; --cv-mark: #a5b4c0;
+    --cv-glass: rgba(90, 180, 240, .16); --cv-edge: #b9c7d2;
+    --cv-screen: rgba(140, 150, 230, .16); --cv-screen-edge: #8798a8;
+    --ray: #ffa22e; --obj: #ff5c93;
+    --st-out: #5aa8ff; --st-2f: #ff5c93; --st-mid: #cf82ea; --st-in: #5ccf72; --st-f: #ff6b63;
+    --warn: #ff7a6e;
+    --shadow: 0 8px 24px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 var(--font-ui);
+    padding-block: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { height: 100%; max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+  h1 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+  h1 svg { width: 22px; height: 22px; stroke: var(--accent); fill: var(--accent-soft); stroke-width: 1.8; }
+
+  .tabs { display: flex; gap: 2px; padding: 3px; background: var(--panel-2); border-radius: 8px; flex: 1 1 280px; max-width: 400px; }
+  .tabs button, .seg button {
+    flex: 1; appearance: none; border: 0; background: transparent; color: var(--muted);
+    font-size: 14px; font-weight: 500; padding: 8px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+  }
+  .tabs button[aria-selected="true"], .seg button[aria-pressed="true"] {
+    background: var(--panel); color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
+  }
+
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 288px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 12px; }
+  .side {
+    min-height: 0; min-width: 0; overflow-y: auto; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 16px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+
+  .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .choice {
+    display: flex; align-items: center; gap: 8px; padding: 9px 10px; text-align: left; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink);
+    font-size: 13px; font-weight: 500;
+  }
+  .choice svg { flex: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .choice[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  .seg { display: flex; gap: 2px; padding: 3px; background: var(--panel-2); border-radius: 8px; }
+  .switch { display: flex; align-items: center; gap: 10px; font-weight: 500; cursor: pointer; }
+  .switch input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+
+  .btn {
+    appearance: none; width: 100%; padding: 9px 12px; border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .readout { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .readout dt { color: var(--muted); }
+  .readout dd { margin: 0; text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .readout .adv { display: none; }
+  .app[data-mode="advanced"] .readout .adv { display: block; }
+
+  .legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .legend i { flex: none; width: 14px; height: 14px; border-radius: 3px; background: var(--c); }
+  .legend span { margin-left: auto; font: 700 13px Arial, Helvetica, sans-serif; color: var(--c); }
+  .note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+  .only-adv, .only-letters { display: none; }
+  .app[data-mode="advanced"] .only-adv { display: block; }
+  .app[data-mode="abc"] .only-letters, .app[data-mode="advanced"] .only-letters { display: block; }
+  .app[data-mode="advanced"] .only-main { display: none; }
+
+  .tips { display: none; margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .tips li + li { margin-top: 4px; }
+  .app[data-mode="basic"] .tips[data-for="basic"],
+  .app[data-mode="abc"] .tips[data-for="abc"],
+  .app[data-mode="advanced"] .tips[data-for="advanced"] { display: block; }
+
+  .stage { position: relative; min-width: 0; min-height: 0; background: var(--cv-bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #cv.can-grab { cursor: grab; }
+  #cv.grabbing { cursor: grabbing; }
+
+  /* 紙屏投影視窗：實體白紙，兩種主題下都維持淺色 */
+  .pip {
+    --ink: #25333f; --obj: #d81b60; --ray: #df820a;
+    --st-out: #1769c9; --st-2f: #d81b60; --st-mid: #8a2ca6; --st-in: #23913a; --st-f: #e0342f;
+    position: absolute; left: 0; top: 0; width: 240px; height: 280px; overflow: hidden;
+    border: 1px solid #c3ccd3; border-radius: 6px; background: var(--paper); color: var(--ink);
+    box-shadow: var(--shadow); touch-action: none; cursor: grab;
+  }
+  .pip.dragging { cursor: grabbing; }
+  .pip-view { position: absolute; inset: 0; background: linear-gradient(var(--paper-line), var(--paper-line)) center / 100% 1px no-repeat, var(--paper); }
+  .pip canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .pip-bar {
+    position: absolute; left: 0; right: 0; top: 0; padding: 6px 10px;
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px;
+    background: var(--paper-bar); border-bottom: 1px solid var(--paper-line); font-size: 12px; line-height: 1.3;
+  }
+  .pip-bar b { font-weight: 700; }
+  .pip-bar span { font-weight: 500; }
+
+  @media (max-width: 819px) {
+    html, body { height: auto; }
+    .app { height: auto; }
+    .main { display: flex; flex-direction: column; }
+    .stage { order: -1; width: 100%; aspect-ratio: 5 / 3; flex: none; }
+    .side { overflow: visible; }
+    .pip-bar b { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app" id="app" data-mode="basic">
+  <header class="top">
+    <h1>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c6 6 6 14 0 20C6 16 6 8 12 2z"/></svg>
+      2D 光學成像模擬器
+    </h1>
+    <div class="tabs" role="tablist" aria-label="模式">
+      <button type="button" role="tab" data-tab="basic" aria-selected="true">基本箭頭</button>
+      <button type="button" role="tab" data-tab="abc" aria-selected="false">字母區分</button>
+      <button type="button" role="tab" data-tab="advanced" aria-selected="false">紙屏投影</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <aside class="side">
+      <div class="only-main">
+        <span class="label" id="lbl-type">光學元件</span>
+        <div class="choice-grid" role="radiogroup" aria-labelledby="lbl-type">
+          <button type="button" class="choice" role="radio" data-type="convex-lens" aria-checked="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c6 6 6 14 0 20C6 16 6 8 12 2z"/></svg>凸透鏡</button>
+          <button type="button" class="choice" role="radio" data-type="concave-lens" aria-checked="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h10c-3 6-3 14 0 20H7c3-6 3-14 0-20z"/></svg>凹透鏡</button>
+          <button type="button" class="choice" role="radio" data-type="convex-mirror" aria-checked="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2Q6 12 14 22M12 5l3 3M10.4 9l3 3M10 13l3 3M11 17l3 3"/></svg>凸面鏡</button>
+          <button type="button" class="choice" role="radio" data-type="concave-mirror" aria-checked="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2Q18 12 10 22M12 5l3 3M13.6 9l3 3M14 13l3 3M13 17l3 3"/></svg>凹面鏡</button>
+        </div>
+      </div>
+
+      <div class="only-adv">
+        <span class="label">凸透鏡專用視圖</span>
+        <p class="note" style="margin:0">模擬真實投影：紙屏接不到像時畫面會模糊，對準像的位置才會清晰。</p>
+      </div>
+
+      <div>
+        <span class="label" id="lbl-side">物體位置</span>
+        <div class="seg" role="group" aria-labelledby="lbl-side">
+          <button type="button" data-side="-1" aria-pressed="true">左側</button>
+          <button type="button" data-side="1" aria-pressed="false">右側</button>
+        </div>
+      </div>
+
+      <label class="switch only-main"><input type="checkbox" id="inf"> 物體在無窮遠</label>
+
+      <div class="only-adv"><button type="button" class="btn" id="focusBtn">紙屏移到像的位置</button></div>
+
+      <div class="only-letters">
+        <span class="label">物體位置與字母</span>
+        <ul class="legend">
+          <li><i style="--c: var(--st-out)"></i>2F 之外<span style="--c: var(--st-out)">A</span></li>
+          <li><i style="--c: var(--st-2f)"></i>剛好在 2F<span style="--c: var(--st-2f)">箭頭</span></li>
+          <li><i style="--c: var(--st-mid)"></i>2F 與 F 之間<span style="--c: var(--st-mid)">B</span></li>
+          <li><i style="--c: var(--st-f)"></i>剛好在 F<span style="--c: var(--st-f)">箭頭</span></li>
+          <li><i style="--c: var(--st-in)"></i>F 之內<span style="--c: var(--st-in)">C</span></li>
+        </ul>
+        <p class="note">凹透鏡與凸面鏡一律用箭頭。</p>
+      </div>
+
+      <dl class="readout" aria-live="polite">
+        <dt>物距</dt><dd id="rd-p"></dd>
+        <dt>焦距</dt><dd id="rd-f"></dd>
+        <dt>像距</dt><dd id="rd-q"></dd>
+        <dt>放大率</dt><dd id="rd-m"></dd>
+        <dt>像的性質</dt><dd id="rd-n"></dd>
+        <dt class="adv">紙屏距離</dt><dd class="adv" id="rd-s"></dd>
+      </dl>
+
+      <ul class="tips" data-for="basic">
+        <li>拖曳物體底部，改變物距</li>
+        <li>拖曳箭頭頂端，改變物高</li>
+        <li>拖曳 F 點，改變焦距</li>
+        <li>靠近 F 或 2F 會自動吸附</li>
+      </ul>
+      <ul class="tips" data-for="abc">
+        <li>字母依物體所在區間改變</li>
+        <li>像的字母會依成像性質翻轉</li>
+        <li>拖曳 F 點，改變焦距</li>
+        <li>靠近 F 或 2F 會自動吸附</li>
+      </ul>
+      <ul class="tips" data-for="advanced">
+        <li>拖曳虛線紙屏，尋找清晰的像</li>
+        <li>紙屏靠近像的位置時會自動吸附</li>
+        <li>投影視窗裡的字母就是紙屏上的像</li>
+        <li>拖曳投影視窗可以移動它</li>
+      </ul>
+    </aside>
+
+    <div class="stage" id="stage">
+      <canvas id="cv" role="img" aria-label="光學成像示意圖"></canvas>
+      <div class="pip" id="pip" hidden>
+        <div class="pip-view"><canvas id="pipCv"></canvas></div>
+        <div class="pip-bar"><b>紙屏投影視角</b><span id="pipNote"></span></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+
+  const WORLD_W = 1000, WORLD_H = 600;   // 世界座標：原點在畫面中心，x 向右、y 向上
+  const PIP_W = 240, PIP_H = 280;
+  const CELL = 20;                       // 一格 = 20 單位
+
+  const S = {
+    tab: 'basic', type: 'convex-lens', side: -1, inf: false,
+    p: 250, y: 60, f: 100,
+    screen: 250,
+    pip: { x: 250, y: -296 },            // 投影視窗左上角（以畫面中心為原點，y 向下）；預設在光軸上方，不蓋住倒立的像
+  };
+
+  const stage = $('#stage'), cv = $('#cv'), ctx = cv.getContext('2d');
+  const pipEl = $('#pip'), pcv = $('#pipCv'), pctx = pcv.getContext('2d'), pipNote = $('#pipNote');
+  const view = { w: 1000, h: 600, s: 1, dpr: 1 };
+  let theme = null, paper = null;
+
+  /* ---------- 成像計算 ---------- */
+  function objState() {
+    const d = (a) => Math.abs(S.p - a);
+    if (d(S.f) < 5) return 'F';
+    if (d(2 * S.f) < 5) return '2F';
+    if (S.p > 2 * S.f) return 'OUT';
+    if (S.p > S.f) return 'MID';
+    return 'IN';
+  }
+
+  function optics() {
+    const isLens = S.type.includes('lens');
+    const f = (S.type === 'convex-lens' || S.type === 'concave-mirror') ? S.f : -S.f;
+    const fwd = isLens ? -S.side : S.side;   // 光離開元件後前進的方向
+    const o = {
+      isLens, f, fwd, objX: S.side * S.p, conv: f > 0,
+      noImage: false, q: 0, imgX: 0, imgY: 0, m: 0, virtual: false, name: '',
+    };
+    if (S.inf) {
+      o.q = f;
+      o.imgX = (f > 0 ? fwd : -fwd) * S.f;
+      o.virtual = f < 0;
+      o.name = '一點';
+    } else if (f > 0 && Math.abs(S.p - f) < 0.5) {
+      o.noImage = true; o.q = Infinity; o.name = '不成像';
+    } else {
+      o.q = S.p * f / (S.p - f);             // 1/p + 1/q = 1/f
+      o.imgX = fwd * o.q;
+      o.m = -o.q / S.p;
+      o.imgY = o.m * S.y;
+      o.virtual = o.q < 0;
+      const mag = Math.abs(o.m);
+      o.name = (o.imgY * S.y >= 0 ? '正' : '倒') + (mag > 1.05 ? '大' : mag < 0.95 ? '小' : '同') + (o.virtual ? '虛' : '實');
+    }
+    o.state = objState();
+    o.kind = (S.tab === 'basic' || !o.conv) ? 'arrow' : ({ OUT: 'A', MID: 'B', IN: 'C' }[o.state] || 'arrow');
+    return o;
+  }
+
+  function colorFor(P, o) {
+    if (S.inf) return P.ray;
+    if (S.tab === 'basic' || !o.conv) return P.obj;
+    return { OUT: P.out, '2F': P.f2, MID: P.mid, IN: P.inn, F: P.f1 }[o.state];
+  }
+
+  /* ---------- 主題 ---------- */
+  function readPalette(el) {
+    const cs = getComputedStyle(el);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    return {
+      bg: g('--cv-bg'), grid: g('--cv-grid'), axis: g('--cv-axis'), mark: g('--cv-mark'),
+      glass: g('--cv-glass'), edge: g('--cv-edge'), screen: g('--cv-screen'), screenEdge: g('--cv-screen-edge'),
+      ray: g('--ray'), obj: g('--obj'), out: g('--st-out'), f2: g('--st-2f'), mid: g('--st-mid'),
+      inn: g('--st-in'), f1: g('--st-f'), warn: g('--warn'), ink: g('--ink'), font: g('--font-ui'),
+    };
+  }
+
+  /* ---------- 繪圖小工具（世界座標，y 向上） ---------- */
+  const lw = (n) => Math.max(n, 1.5 / view.s);
+  const dash = () => [Math.max(8, 5 / view.s), Math.max(6, 4 / view.s)];
+
+  function text(c, str, x, y, o) {
+    c.save();
+    c.translate(x, y); c.scale(1, -1);
+    c.font = `${o.weight || 700} ${o.size}px ${theme.font}`;
+    c.textAlign = o.align || 'center'; c.textBaseline = 'alphabetic';
+    c.fillStyle = o.color; c.fillText(str, 0, 0);
+    c.restore();
+  }
+
+  function seg(c, x1, y1, x2, y2, color, width, dashed) {
+    c.beginPath();
+    c.setLineDash(dashed ? dash() : []);
+    c.strokeStyle = color; c.lineWidth = width;
+    c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.setLineDash([]);
+  }
+
+  // 在 (x,0) 處畫物或像；h 為帶正負號的高度（尖端在 (x,h)）
+  const GLYPH_FONT = '700 100px Arial, "Helvetica Neue", Helvetica, sans-serif';
+  function drawGlyph(c, P, kind, x, h, color, opt) {
+    opt = opt || {};
+    if (!isFinite(h) || Math.abs(h) < 0.5 || Math.abs(h) > 4000) return;
+    const virtual = !!opt.virtual;
+    c.save();
+    c.translate(x, 0);
+    if (kind === 'arrow') {
+      const dir = h >= 0 ? 1 : -1;
+      c.strokeStyle = color; c.fillStyle = color; c.lineWidth = lw(3); c.lineJoin = 'round';
+      if (virtual) c.setLineDash(dash());
+      c.beginPath(); c.moveTo(0, 0); c.lineTo(0, h); c.stroke();
+      c.setLineDash([]);
+      c.beginPath(); c.moveTo(0, h); c.lineTo(-8, h - dir * 14); c.lineTo(8, h - dir * 14); c.closePath();
+      if (virtual) { c.fillStyle = P.bg; c.fill(); c.stroke(); } else { c.fill(); }
+    } else {
+      const k = Math.abs(h) / 72;            // Arial 粗體 100px 的大寫字高約 72
+      c.scale(1, -1);                        // 先回到文字的正向（y 向下）
+      c.font = GLYPH_FONT; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+      const flipX = !!opt.image && !virtual; // 實像是旋轉 180°：上下與左右都翻
+      c.scale((flipX ? -1 : 1) * k, (h < 0 ? -1 : 1) * k);
+      if (virtual) {
+        c.strokeStyle = color; c.lineWidth = 4 / k; c.setLineDash([12 / k, 8 / k]);
+        c.strokeText(kind, 0, 0);
+      } else {
+        c.fillStyle = color; c.fillText(kind, 0, 0);
+      }
+    }
+    c.restore();
+  }
+
+  /* ---------- 主畫面各部分 ---------- */
+  function drawGrid(c, P, hw, hh) {
+    c.lineWidth = 1 / view.s; c.strokeStyle = P.grid; c.beginPath();
+    for (let x = 0; x <= hw; x += CELL) { c.moveTo(x, -hh); c.lineTo(x, hh); c.moveTo(-x, -hh); c.lineTo(-x, hh); }
+    for (let y = 0; y <= hh; y += CELL) { c.moveTo(-hw, y); c.lineTo(hw, y); c.moveTo(-hw, -y); c.lineTo(hw, -y); }
+    c.stroke();
+    c.strokeStyle = P.axis; c.lineWidth = 1.6 / view.s; c.beginPath();
+    c.moveTo(-hw, 0); c.lineTo(hw, 0); c.moveTo(0, -hh); c.lineTo(0, hh); c.stroke();
+  }
+
+  function drawMarks(c, P) {
+    const fs = Math.max(20, 12 / view.s);
+    [-2 * S.f, -S.f, S.f, 2 * S.f].forEach((x) => {
+      const isF = Math.abs(x) === S.f;
+      c.fillStyle = P.mark;
+      c.beginPath(); c.arc(x, 0, isF ? 5.5 : 4.5, 0, Math.PI * 2); c.fill();
+      if (isF) {                              // 外圈提示 F 點可以拖曳
+        c.save(); c.globalAlpha = .45; c.strokeStyle = P.mark; c.lineWidth = lw(1.5);
+        c.beginPath(); c.arc(x, 0, 13, 0, Math.PI * 2); c.stroke(); c.restore();
+      }
+      text(c, isF ? 'F' : '2F', x, -32, { size: fs, color: P.mark });
+    });
+  }
+
+  function outRay(c, P, o, sx, sy, tx, ty, back) {
+    let dx = tx - sx, dy = ty - sy;
+    if (dx !== 0 && Math.sign(dx) !== o.fwd) { dx = -dx; dy = -dy; }
+    const len = Math.hypot(dx, dy);
+    if (!len) return;
+    seg(c, sx, sy, sx + dx / len * 2000, sy + dy / len * 2000, P.ray, lw(2.5));
+    if (back) seg(c, sx, sy, back.x, back.y, P.ray, lw(1.6), true);   // 虛像：反向延長線止於像點
+  }
+
+  function drawRays(c, P, o) {
+    const fx = (o.conv ? o.fwd : -o.fwd) * S.f;
+    if (S.inf) {
+      const back = o.virtual ? { x: o.imgX, y: 0 } : null;
+      [-80, -40, 0, 40, 80].forEach((y) => {
+        seg(c, S.side * 2000, y, 0, y, P.ray, lw(2.5));
+        outRay(c, P, o, 0, y, fx, 0, back);
+      });
+      return;
+    }
+    const ox = o.objX, oy = S.y;
+    const back = o.virtual ? { x: o.imgX, y: o.imgY } : null;
+    seg(c, ox, oy, 0, oy, P.ray, lw(2.5));              // 平行光軸入射 → 過焦點
+    outRay(c, P, o, 0, oy, fx, 0, back);
+    seg(c, ox, oy, 0, 0, P.ray, lw(2.5));               // 打到元件中心
+    outRay(c, P, o, 0, 0, o.isLens ? -ox : ox, -oy, back);
+  }
+
+  function drawElement(c, P) {
+    const curve = Math.max(10, 50 - S.f * 0.15);
+    c.save();
+    c.strokeStyle = P.edge; c.lineWidth = lw(2); c.lineJoin = 'round';
+    if (S.type === 'convex-lens') {
+      c.beginPath(); c.moveTo(0, 180);
+      c.quadraticCurveTo(curve, 0, 0, -180); c.quadraticCurveTo(-curve, 0, 0, 180);
+      c.fillStyle = P.glass; c.fill(); c.stroke();
+    } else if (S.type === 'concave-lens') {
+      const e = curve / 2;
+      c.beginPath(); c.moveTo(-e, 180); c.lineTo(e, 180);
+      c.quadraticCurveTo(e - 10, 0, e, -180); c.lineTo(-e, -180);
+      c.quadraticCurveTo(-e + 10, 0, -e, 180); c.closePath();
+      c.fillStyle = P.glass; c.fill(); c.stroke();
+    } else {
+      const bulge = S.type === 'concave-mirror' ? -S.side : S.side;
+      c.lineWidth = lw(3);
+      c.beginPath(); c.moveTo(0, 180); c.quadraticCurveTo(bulge * 40, 0, 0, -180); c.stroke();
+      c.lineWidth = lw(1.2); c.beginPath();
+      for (let y = -160; y <= 160; y += 20) {          // 背面斜線，畫在反射面的反方向
+        const bx = (1 - (y / 180) * (y / 180)) * bulge * 20;
+        c.moveTo(bx, y); c.lineTo(bx - S.side * 15, y - 15);
+      }
+      c.stroke();
+    }
+    c.restore();
+  }
+
+  function drawObjects(c, P, o) {
+    const color = colorFor(P, o);
+    const fs = Math.max(24, 13 / view.s);
+    const hh = view.h / (2 * view.s);
+    if (S.inf) {
+      c.fillStyle = color; c.beginPath(); c.arc(o.imgX, 0, 6, 0, Math.PI * 2); c.fill();
+      text(c, o.name, o.imgX, 22, { size: fs, color });
+      return;
+    }
+    drawGlyph(c, P, o.kind, o.objX, S.y, color);
+    if (o.noImage) {
+      c.save(); c.strokeStyle = P.warn; c.globalAlpha = .9; c.lineWidth = lw(10); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(-38, -38); c.lineTo(38, 38); c.moveTo(38, -38); c.lineTo(-38, 38); c.stroke();
+      c.restore();
+      text(c, '不成像', 0, -82, { size: fs, color: P.warn });
+      return;
+    }
+    if (Math.abs(o.imgX) > 1500) return;
+    drawGlyph(c, P, o.kind, o.imgX, o.imgY, color, { virtual: o.virtual, image: true });
+    const ly = o.imgY >= 0 ? o.imgY + 26 : o.imgY - 46;
+    text(c, o.name, o.imgX, clamp(ly, -hh + 10, hh - 30), { size: fs, color });
+  }
+
+  function drawScreen(c, P) {
+    c.save();
+    c.fillStyle = P.screen; c.strokeStyle = P.screenEdge; c.lineWidth = lw(2); c.setLineDash([10, 5]);
+    c.fillRect(S.screen - 4, -220, 8, 440); c.strokeRect(S.screen - 4, -220, 8, 440);
+    c.restore();
+    text(c, '紙屏', S.screen, 232, { size: Math.max(17, 12 / view.s), color: P.ink });
+  }
+
+  /* ---------- 紙屏投影視窗 ---------- */
+  function drawPip(o) {
+    const P = paper, { s, dpr } = view;
+    const pw = PIP_W * s, ph = PIP_H * s;
+    pipEl.style.width = pw + 'px'; pipEl.style.height = ph + 'px';
+    pipEl.style.left = (view.w / 2 + S.pip.x * s) + 'px';
+    pipEl.style.top = (view.h / 2 + S.pip.y * s) + 'px';
+    const bw = Math.max(1, Math.round(pw * dpr)), bh = Math.max(1, Math.round(ph * dpr));
+    if (pcv.width !== bw || pcv.height !== bh) { pcv.width = bw; pcv.height = bh; }
+    const c = pctx;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, bw, bh);
+    c.setTransform(dpr * s, 0, 0, -dpr * s, bw / 2, bh / 2);   // 原點在視窗中心（光軸高度）
+
+    let blur = 0, note = '';
+    if (o.virtual || o.noImage) {
+      c.globalAlpha = .25; c.fillStyle = P.ink;
+      c.beginPath(); c.arc(0, 0, 60, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
+      blur = 30; note = '無清晰實像';
+    } else if (Math.sign(S.screen) !== o.fwd) {
+      note = '紙屏在物體這一側，接不到像';
+    } else {
+      const d = Math.abs(S.screen - o.imgX);
+      blur = Math.min(50 * d / Math.abs(o.imgX), 40);
+      const tip = S.y * S.screen / o.objX;      // 過中心的光線打在紙屏上的高度
+      drawGlyph(c, P, o.kind, 0, tip, colorFor(P, o), { image: true });
+      note = d < 4 ? '對焦清晰' : `離焦 ${(d / CELL).toFixed(1)} 格，像模糊`;
+    }
+    pcv.style.filter = blur * s > 0.4 ? `blur(${(blur * s).toFixed(2)}px)` : 'none';
+    pipNote.textContent = note;
+  }
+
+  /* ---------- 側欄數值 ---------- */
+  const rd = { p: $('#rd-p'), f: $('#rd-f'), q: $('#rd-q'), m: $('#rd-m'), n: $('#rd-n'), s: $('#rd-s') };
+  const focusBtn = $('#focusBtn');
+  const fmt = (v) => (v / CELL).toFixed(1) + ' 格';
+
+  function updateReadout(o) {
+    rd.p.textContent = S.inf ? '∞' : fmt(S.p);
+    rd.f.textContent = (o.conv ? '+' : '−') + fmt(S.f);
+    if (S.inf) { rd.q.textContent = fmt(S.f); rd.m.textContent = '—'; }
+    else if (o.noImage) { rd.q.textContent = '∞'; rd.m.textContent = '—'; }
+    else {
+      rd.q.textContent = Math.abs(o.q) > 2000 ? '極遠' : fmt(Math.abs(o.q));
+      rd.m.textContent = Math.abs(o.m) > 99 ? '極大' : Math.abs(o.m).toFixed(2) + ' 倍';
+    }
+    rd.n.textContent = o.name;
+    rd.s.textContent = fmt(Math.abs(S.screen));
+    focusBtn.disabled = !(!S.inf && !o.noImage && !o.virtual && Math.abs(o.imgX) <= 480);
+    cv.setAttribute('aria-label', `光學成像示意圖，物距 ${S.inf ? '無窮遠' : fmt(S.p)}，焦距 ${fmt(S.f)}，像：${o.name}`);
+  }
+
+  /* ---------- 主繪圖 ---------- */
+  function draw() {
+    if (!theme) return;
+    const P = theme, c = ctx, { w, h, s, dpr } = view;
+    const o = optics();
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = P.bg; c.fillRect(0, 0, w, h);
+    c.setTransform(dpr * s, 0, 0, -dpr * s, dpr * w / 2, dpr * h / 2);
+    drawGrid(c, P, w / (2 * s), h / (2 * s));
+    drawMarks(c, P);
+    drawRays(c, P, o);
+    drawElement(c, P);
+    drawObjects(c, P, o);
+    if (S.tab === 'advanced') { drawScreen(c, P); drawPip(o); }
+    updateReadout(o);
+  }
+
+  /* ---------- 互動 ---------- */
+  let queued = false;
+  const schedule = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; draw(); });
+  };
+
+  function toWorld(e) {
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.w / 2) / view.s, y: -(e.clientY - r.top - view.h / 2) / view.s };
+  }
+
+  // 同時落在多個目標範圍內時，取最近的那個
+  function hit(wx, wy) {
+    const best = { kind: null, d: Infinity };
+    const test = (kind, d, r) => { if (d < r && d < best.d) { best.kind = kind; best.d = d; } };
+    test('focus', Math.hypot(Math.abs(wx) - S.f, wy), Math.max(40, 22 / view.s));
+    if (S.tab === 'advanced') test('screen', Math.abs(wx - S.screen), Math.max(30, 18 / view.s));
+    if (!S.inf) {
+      const ox = S.side * S.p, r = Math.max(45, 24 / view.s);
+      test('tip', Math.hypot(wx - ox, wy - S.y), r);
+      test('base', Math.hypot(wx - ox, wy), r);
+    }
+    return best.kind;
+  }
+
+  let drag = null;
+  function applyDrag(p) {
+    if (drag.kind === 'focus') {
+      S.f = clamp(Math.abs(p.x), 30, 240);
+    } else if (drag.kind === 'screen') {
+      let v = clamp(p.x, -480, 480);
+      if (Math.abs(v) < 10) v = 10 * (Math.sign(v) || 1);
+      const o = optics();
+      if (!S.inf && !o.noImage && !o.virtual && Math.abs(v - o.imgX) < 6) v = o.imgX;   // 靠近像時吸附
+      S.screen = v;
+    } else {
+      let np = S.side === -1 ? -p.x : p.x;
+      if (Math.abs(np - S.f) < 12) np = S.f;
+      else if (Math.abs(np - 2 * S.f) < 12) np = 2 * S.f;
+      S.p = clamp(np, 20, 480);
+      if (drag.kind === 'tip') {
+        let ny = clamp(p.y, -250, 250);
+        if (Math.abs(ny) < 20) ny = 20 * (Math.sign(ny) || 1);
+        S.y = ny;
+      }
+    }
+    schedule();
+  }
+
+  cv.addEventListener('pointerdown', (e) => {
+    const p = toWorld(e), kind = hit(p.x, p.y);
+    if (!kind) return;
+    drag = { kind };
+    cv.setPointerCapture(e.pointerId);
+    cv.classList.add('grabbing');
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const p = toWorld(e);
+    if (drag) applyDrag(p);
+    else cv.classList.toggle('can-grab', !!hit(p.x, p.y));
+  });
+  const endDrag = () => { drag = null; cv.classList.remove('grabbing'); };
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  // 投影視窗拖曳
+  function clampPip() {
+    const hw = view.w / (2 * view.s), hh = view.h / (2 * view.s);
+    S.pip.x = clamp(S.pip.x, -hw, hw - PIP_W);
+    S.pip.y = clamp(S.pip.y, -hh, hh - PIP_H);
+  }
+  let pipDrag = null;
+  pipEl.addEventListener('pointerdown', (e) => {
+    const p = toWorld(e);
+    pipDrag = { dx: p.x - S.pip.x, dy: -p.y - S.pip.y };
+    pipEl.setPointerCapture(e.pointerId);
+    pipEl.classList.add('dragging');
+    e.preventDefault();
+  });
+  pipEl.addEventListener('pointermove', (e) => {
+    if (!pipDrag) return;
+    const p = toWorld(e);
+    S.pip.x = p.x - pipDrag.dx;
+    S.pip.y = -p.y - pipDrag.dy;
+    clampPip();
+    schedule();
+  });
+  const endPip = () => { pipDrag = null; pipEl.classList.remove('dragging'); };
+  pipEl.addEventListener('pointerup', endPip);
+  pipEl.addEventListener('pointercancel', endPip);
+
+  /* ---------- 控制項 ---------- */
+  function renderUI() {
+    $('#app').dataset.mode = S.tab;
+    document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
+    document.querySelectorAll('[data-type]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.type === S.type)));
+    document.querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.side) === S.side)));
+    $('#inf').checked = S.inf;
+    pipEl.hidden = S.tab !== 'advanced';
+  }
+
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+    S.tab = b.dataset.tab;
+    if (S.tab === 'advanced') { S.type = 'convex-lens'; S.inf = false; }   // 紙屏投影只支援凸透鏡
+    renderUI(); draw();
+  }));
+  document.querySelectorAll('[data-type]').forEach((b) => b.addEventListener('click', () => {
+    S.type = b.dataset.type; renderUI(); draw();
+  }));
+  document.querySelectorAll('[data-side]').forEach((b) => b.addEventListener('click', () => {
+    const v = Number(b.dataset.side);
+    if (v === S.side) return;
+    S.side = v;
+    S.screen = -S.screen;                                                   // 紙屏跟著換到像的那一側
+    renderUI(); draw();
+  }));
+  $('#inf').addEventListener('change', (e) => { S.inf = e.target.checked; draw(); });
+  focusBtn.addEventListener('click', () => {
+    const o = optics();
+    if (!S.inf && !o.noImage && !o.virtual && Math.abs(o.imgX) <= 480) { S.screen = o.imgX; draw(); }
+  });
+
+  /* ---------- 尺寸與主題 ---------- */
+  function resize() {
+    view.w = Math.max(1, stage.clientWidth);
+    view.h = Math.max(1, stage.clientHeight);
+    view.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    view.s = Math.min(view.w / WORLD_W, view.h / WORLD_H);   // 等比縮放，世界座標 1000 × 600 完整可見
+    cv.width = Math.round(view.w * view.dpr);
+    cv.height = Math.round(view.h * view.dpr);
+    clampPip();
+    draw();
+  }
+  function refreshTheme() {
+    theme = readPalette(document.documentElement);
+    paper = readPalette(pipEl);
+    draw();
+  }
+
+  new ResizeObserver(resize).observe(stage);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
+  new MutationObserver(refreshTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(refreshTheme);
+
+  theme = readPalette(document.documentElement);
+  paper = readPalette(pipEl);
+  renderUI();
+  resize();
+})();
+</script>
+
+</body></html>
