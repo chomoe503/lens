@@ -146,6 +146,21 @@
   #cv.can-grab { cursor: grab; }
   #cv.grabbing { cursor: grabbing; }
 
+  /* 縮放工具列：放在舞台左上角（右上角是紙屏投影視窗的預設位置） */
+  .zoombar {
+    position: absolute; left: 0.571rem; top: 0.571rem; z-index: 2; display: flex; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 0.429rem; overflow: hidden;
+    box-shadow: 0 1px 0.286rem rgba(0, 0, 0, .14);
+  }
+  .zoombar button {
+    appearance: none; border: 0; background: transparent; color: var(--ink); cursor: pointer;
+    min-width: 2.143rem; height: 2.143rem; padding: 0 0.429rem; font-size: 1.143rem; font-weight: 500; line-height: 1;
+  }
+  .zoombar button + button { border-left: 1px solid var(--line); }
+  .zoombar button:disabled { opacity: .4; cursor: default; }
+  #zoomPct { min-width: 3.9rem; font: 500 0.857rem var(--font-num); font-variant-numeric: tabular-nums; color: var(--accent); }
+  #zoomPct.is-default { color: var(--muted); cursor: default; }
+
   /* 紙屏投影視窗：實體白紙，兩種主題下都維持淺色 */
   .pip {
     --ink: #25333f; --obj: #d81b60; --ray: #df820a;
@@ -268,29 +283,38 @@
         <li>拖曳箭頭頂端，改變物高</li>
         <li>拖曳 F 點，改變焦距</li>
         <li>靠近 F 或 2F 會自動吸附</li>
+        <li>兩指開合或滾輪縮放；放大後可平移</li>
       </ul>
       <ul class="tips" data-for="abc">
         <li>字母依物體所在區間改變</li>
         <li>像的字母會依成像性質翻轉</li>
         <li>拖曳 F 點，改變焦距</li>
         <li>靠近 F 或 2F 會自動吸附</li>
+        <li>兩指開合或滾輪縮放；放大後可平移</li>
       </ul>
       <ul class="tips" data-for="3d">
         <li>拖曳物體底部，沿主軸前後移動</li>
         <li>拖曳字母或箭頭頂端，改變高度</li>
         <li>拖曳 F 點，改變焦距</li>
         <li>拖曳空白處，轉動視角</li>
+        <li>兩指開合或滾輪縮放，Shift＋拖曳平移</li>
       </ul>
       <ul class="tips" data-for="advanced">
         <li>拖曳虛線紙屏，尋找清晰的像</li>
         <li>紙屏靠近像的位置時會自動吸附</li>
         <li>投影視窗裡的字母就是紙屏上的像</li>
         <li>拖曳投影視窗可以移動它</li>
+        <li>兩指開合或滾輪縮放；放大後可平移</li>
       </ul>
     </aside>
 
     <div class="stage" id="stage">
       <canvas id="cv" role="img" aria-label="光學成像示意圖"></canvas>
+      <div class="zoombar" role="group" aria-label="縮放畫面">
+        <button type="button" id="zoomOut" aria-label="縮小">−</button>
+        <button type="button" id="zoomPct" class="is-default" aria-label="重設縮放" title="重設為 100%">100%</button>
+        <button type="button" id="zoomIn" aria-label="放大">+</button>
+      </div>
       <div class="pip" id="pip" hidden>
         <div class="pip-view"><canvas id="pipCv"></canvas></div>
         <div class="pip-bar"><b>紙屏投影視角</b><span id="pipNote"></span></div>
@@ -314,13 +338,20 @@
     face: 'side',                        // 字母擺放：side 側面（平行主軸）／front 正面（垂直主軸）
     p: 250, y: 60, f: 100,
     screen: 250,
+    zoom: { d2: { z: 1, x: 0, y: 0 }, d3: { z: 1, x: 0, y: 0 } },   // 縮放倍率與平移（螢幕像素）；2D 與 3D 各自獨立
     pip: { x: 250, y: -296 },            // 投影視窗左上角（以畫面中心為原點，y 向下）；預設在光軸上方，不蓋住倒立的像
   };
 
   const stage = $('#stage'), cv = $('#cv'), ctx = cv.getContext('2d');
   const pipEl = $('#pip'), pcv = $('#pipCv'), pctx = pcv.getContext('2d'), pipNote = $('#pipNote');
-  const view = { w: 1000, h: 600, s: 1, dpr: 1 };
+  // s0：恰好容納整個世界的基準比例；s = s0 × 縮放倍率；(ox, oy) = 世界原點在畫布上的位置
+  const view = { w: 1000, h: 600, s: 1, s0: 1, ox: 500, oy: 300, dpr: 1 };
   let theme = null, paper = null;
+  const ZMIN = 0.5, ZMAX = 6;
+  function syncView() {
+    const g = S.zoom.d2;
+    view.s = view.s0 * g.z; view.ox = view.w / 2 + g.x; view.oy = view.h / 2 + g.y;
+  }
 
   /* ---------- 成像計算 ---------- */
   function objState() {
@@ -528,7 +559,7 @@
   function drawObjects(c, P, o) {
     const color = colorFor(P, o);
     const fs = Math.max(24, 13 / view.s);
-    const hh = view.h / (2 * view.s);
+    const yTop = view.oy / view.s, yBot = -(view.h - view.oy) / view.s;   // 目前看得到的 y 範圍
     if (S.inf) {
       c.fillStyle = color; c.beginPath(); c.arc(o.imgX, 0, 6, 0, Math.PI * 2); c.fill();
       text(c, o.name, o.imgX, 22, { size: fs, color });
@@ -546,7 +577,7 @@
     const fl = flips(o);
     drawGlyph(c, P, o.kind, o.imgX, o.imgY, color, { virtual: o.virtual, flipX: !!(fl && fl.h) });
     const ly = o.imgY >= 0 ? o.imgY + 26 : o.imgY - 46;
-    text(c, o.name, o.imgX, clamp(ly, -hh + 10, hh - 30), { size: fs, color });
+    text(c, o.name, o.imgX, clamp(ly, yBot + 10, yTop - 30), { size: fs, color });
   }
 
   function drawScreen(c, P) {
@@ -612,18 +643,24 @@
   /* ---------- 主繪圖 ---------- */
   function draw() {
     if (!theme) return;
+    syncView();
     const P = theme, c = ctx, { w, h, s, dpr } = view;
     const o = optics();
     if (S.tab === '3d') { draw3D(o); updateReadout(o); return; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.fillStyle = P.bg; c.fillRect(0, 0, w, h);
-    c.setTransform(dpr * s, 0, 0, -dpr * s, dpr * w / 2, dpr * h / 2);
-    drawGrid(c, P, w / (2 * s), h / (2 * s));
+    c.setTransform(dpr * s, 0, 0, -dpr * s, dpr * view.ox, dpr * view.oy);
+    drawGrid(c, P, Math.max(view.ox, w - view.ox) / s, Math.max(view.oy, h - view.oy) / s);
     drawMarks(c, P);
     drawRays(c, P, o);
     drawElement(c, P);
     drawObjects(c, P, o);
-    if (S.tab === 'advanced') { drawScreen(c, P); drawPip(o); }
+    if (S.tab === 'advanced') {
+      drawScreen(c, P);
+      const sv = view.s; view.s = view.s0;                 // 投影視窗不跟著縮放，用基準比例繪製
+      drawPip(o);
+      view.s = sv;
+    }
     updateReadout(o);
   }
 
@@ -652,8 +689,8 @@
       ys.push(-(X * u[0] + Y * u[1] + Z * u[2]));
     }
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const k = Math.min(view.w / (x1 - x0), view.h / (y1 - y0)) * 0.94;
-    G = { k, r, u, f, cx: view.w / 2 - k * (x0 + x1) / 2, cy: view.h / 2 - k * (y0 + y1) / 2 };
+    const Z = S.zoom.d3, k = Math.min(view.w / (x1 - x0), view.h / (y1 - y0)) * 0.94 * Z.z;
+    G = { k, r, u, f, cx: view.w / 2 + Z.x - k * (x0 + x1) / 2, cy: view.h / 2 + Z.y - k * (y0 + y1) / 2 };
     return G;
   }
   const P3 = (X, Y, Z) => [G.cx + G.k * (X * G.r[0] + Y * G.r[1] + Z * G.r[2]), G.cy - G.k * (X * G.u[0] + Y * G.u[1] + Z * G.u[2])];
@@ -887,19 +924,24 @@
     requestAnimationFrame(() => { queued = false; draw(); });
   };
 
-  function toWorld(e) {
+  function toWorld(e) {                                        // 螢幕 → 世界座標（含縮放與平移）
     const r = cv.getBoundingClientRect();
-    return { x: (e.clientX - r.left - view.w / 2) / view.s, y: -(e.clientY - r.top - view.h / 2) / view.s };
+    return { x: (e.clientX - r.left - view.ox) / view.s, y: -(e.clientY - r.top - view.oy) / view.s };
+  }
+  function toBase(e) {                                         // 螢幕 → 未縮放時的世界座標（投影視窗用）
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.w / 2) / view.s0, y: -(e.clientY - r.top - view.h / 2) / view.s0 };
   }
 
   // 同時落在多個目標範圍內時，取最近的那個
   function hit(wx, wy) {
     const best = { kind: null, d: Infinity };
     const test = (kind, d, r) => { if (d < r && d < best.d) { best.kind = kind; best.d = d; } };
-    test('focus', Math.hypot(Math.abs(wx) - S.f, wy), Math.max(40, 22 / view.s));
-    if (S.tab === 'advanced') test('screen', Math.abs(wx - S.screen), Math.max(30, 18 / view.s));
+    const z = S.zoom.d2.z;                                     // 點擊範圍以螢幕大小為準：放大時世界單位的範圍相應縮小
+    test('focus', Math.hypot(Math.abs(wx) - S.f, wy), Math.max(40 / z, 22 / view.s));
+    if (S.tab === 'advanced') test('screen', Math.abs(wx - S.screen), Math.max(30 / z, 18 / view.s));
     if (!S.inf) {
-      const ox = S.side * S.p, r = Math.max(45, 24 / view.s);
+      const ox = S.side * S.p, r = Math.max(45 / z, 24 / view.s);
       test('tip', Math.hypot(wx - ox, wy - S.y), r);
       test('base', Math.hypot(wx - ox, wy), r);
     }
@@ -922,33 +964,121 @@
     schedule();
   }
 
+  /* ---------- 指標事件：單指拖曳物件，兩指縮放／平移 ---------- */
+  const ptrs = new Map();                                      // 目前按在畫布上的指標：id → [x, y]（畫布像素）
+  let pinch = null;
+
   cv.addEventListener('pointerdown', (e) => {
+    if (ptrs.size >= 2) return;                                // 第三指以上忽略
+    const q = px3(e);
+    ptrs.set(e.pointerId, q);
+    try { cv.setPointerCapture(e.pointerId); } catch (_) { /* 指標已不存在 */ }
+    if (ptrs.size === 2) { startPinch(); e.preventDefault(); return; }
+    const g = Zs();
+    const pan = () => ({ kind: 'pan', x0: q[0], y0: q[1], gx: g.x, gy: g.y });
     if (S.tab === '3d') {
-      const q = px3(e), kind = hit3(q[0], q[1]);
-      let off = [0, 0];                                          // 記下抓取點與目標的偏移，拖曳時物體不會跳到滑鼠位置
-      if (kind === 'base') off = [axisX(q[0], q[1]) - S.side * S.p, 0];
-      else if (kind === 'tip') { const xy = planeXY(q[0], q[1]); off = [xy[0] - S.side * S.p, xy[1] - S.y]; }
-      else if (kind === 'focus') { const X = axisX(q[0], q[1]); off = [X - Math.sign(X) * S.f, 0]; }
-      drag = kind ? { kind, off } : { kind: 'orbit', x0: q[0], y0: q[1], az0: S.cam.sgn * S.cam.mag, pitch0: S.cam.pitch };
-      cv.setPointerCapture(e.pointerId); cv.classList.add('grabbing'); e.preventDefault();
-      return;
+      if (e.shiftKey) drag = pan();                            // Shift＋拖曳：平移
+      else {
+        const kind = hit3(q[0], q[1]);
+        let off = [0, 0];                                      // 記下抓取點與目標的偏移，拖曳時物體不會跳到滑鼠位置
+        if (kind === 'base') off = [axisX(q[0], q[1]) - S.side * S.p, 0];
+        else if (kind === 'tip') { const xy = planeXY(q[0], q[1]); off = [xy[0] - S.side * S.p, xy[1] - S.y]; }
+        else if (kind === 'focus') { const X = axisX(q[0], q[1]); off = [X - Math.sign(X) * S.f, 0]; }
+        drag = kind ? { kind, off } : { kind: 'orbit', x0: q[0], y0: q[1], az0: S.cam.sgn * S.cam.mag, pitch0: S.cam.pitch };
+      }
+    } else {
+      const p = toWorld(e), kind = hit(p.x, p.y);
+      if (kind) drag = { kind };
+      else if (g.z > 1.001) drag = pan();                      // 放大後，拖曳空白處平移
+      else return;
     }
-    const p = toWorld(e), kind = hit(p.x, p.y);
-    if (!kind) return;
-    drag = { kind };
-    cv.setPointerCapture(e.pointerId);
-    cv.classList.add('grabbing');
-    e.preventDefault();
+    cv.classList.add('grabbing'); e.preventDefault();
   });
   cv.addEventListener('pointermove', (e) => {
-    if (S.tab === '3d') { if (drag) applyDrag3(px3(e)); return; }
+    const q = px3(e);
+    if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, q);
+    if (pinch) { pinchMove(); return; }
+    if (drag && drag.kind === 'pan') { const g = Zs(); g.x = drag.gx + q[0] - drag.x0; g.y = drag.gy + q[1] - drag.y0; clampView(g); viewChanged(); return; }
+    if (S.tab === '3d') { if (drag) applyDrag3(q); return; }
     const p = toWorld(e);
     if (drag) applyDrag(p);
     else cv.classList.toggle('can-grab', !!hit(p.x, p.y));
   });
-  const endDrag = () => { drag = null; cv.classList.remove('grabbing'); };
+  const endDrag = (e) => {
+    ptrs.delete(e.pointerId);
+    if (pinch && ptrs.size < 2) pinch = null;
+    drag = null; cv.classList.remove('grabbing');
+  };
   cv.addEventListener('pointerup', endDrag);
   cv.addEventListener('pointercancel', endDrag);
+
+  /* ---------- 縮放與平移 ---------- */
+  // 對應關係：螢幕位置 = 中心 + 倍率 × (原位置 − 中心) + 平移；以 (ax, ay)＝錨點在「未縮放、未平移」座標的位置，保持它跟著手指／游標
+  const Zs = () => (S.tab === '3d' ? S.zoom.d3 : S.zoom.d2);
+  function clampView(g) {
+    const mx = g.z * view.w / 2, my = g.z * view.h / 2;
+    g.x = clamp(g.x, -mx, mx); g.y = clamp(g.y, -my, my);
+    if (g.z === 1 && Math.hypot(g.x, g.y) < 8) { g.x = 0; g.y = 0; }   // 回到 100% 時順便歸位
+  }
+  function viewChanged() { syncView(); updateZoomUI(); schedule(); }
+  function setView(g, z1, qx, qy, ax, ay) {
+    z1 = clamp(z1, ZMIN, ZMAX);
+    if (Math.abs(z1 - 1) < 0.03) z1 = 1;                       // 接近 100% 時吸附
+    g.z = z1;
+    g.x = qx - view.w / 2 - ax * z1;
+    g.y = qy - view.h / 2 - ay * z1;
+    clampView(g); viewChanged();
+  }
+  const zoomTo = (g, z1, qx, qy) => setView(g, z1, qx, qy, (qx - view.w / 2 - g.x) / g.z, (qy - view.h / 2 - g.y) / g.z);
+
+  function startPinch() {
+    drag = null; cv.classList.remove('grabbing');              // 第二指落下：放棄正在進行的拖曳，改成縮放
+    const [a, b] = [...ptrs.values()], g = Zs();
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    pinch = { d0: Math.max(12, Math.hypot(a[0] - b[0], a[1] - b[1])), z0: g.z, ax: (mx - view.w / 2 - g.x) / g.z, ay: (my - view.h / 2 - g.y) / g.z };
+  }
+  function pinchMove() {
+    const [a, b] = [...ptrs.values()];
+    if (!b) return;
+    setView(Zs(), pinch.z0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, pinch.ax, pinch.ay);
+  }
+
+  // 滾輪／觸控板：以游標位置為中心縮放（觸控板雙指開合在瀏覽器裡以 ctrl＋滾輪呈現）
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const dy = e.deltaY * (e.deltaMode === 1 ? 30 : e.deltaMode === 2 ? 400 : 1);
+    const g = Zs(), r = cv.getBoundingClientRect();
+    zoomTo(g, g.z * Math.exp(clamp(-dy * (e.ctrlKey ? 0.01 : 0.0015), -0.22, 0.22)), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  // Safari（Mac 觸控板）用 gesture 事件；若已有指標事件的雙指縮放在進行就略過，避免重複處理
+  let gz = null;
+  stage.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    if (ptrs.size >= 2) { gz = null; return; }
+    const g = Zs(), r = cv.getBoundingClientRect();
+    const qx = (typeof e.clientX === 'number' ? e.clientX - r.left : view.w / 2), qy = (typeof e.clientY === 'number' ? e.clientY - r.top : view.h / 2);
+    gz = { z0: g.z, qx, qy, ax: (qx - view.w / 2 - g.x) / g.z, ay: (qy - view.h / 2 - g.y) / g.z };
+  });
+  stage.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (gz && ptrs.size < 2) setView(Zs(), gz.z0 * e.scale, gz.qx, gz.qy, gz.ax, gz.ay);
+  });
+  stage.addEventListener('gestureend', (e) => { e.preventDefault(); gz = null; });
+
+  // 縮放工具列
+  const zoomPct = $('#zoomPct'), zoomInB = $('#zoomIn'), zoomOutB = $('#zoomOut');
+  function updateZoomUI() {
+    const g = Zs();
+    zoomPct.textContent = Math.round(g.z * 100) + '%';
+    zoomPct.classList.toggle('is-default', g.z === 1 && g.x === 0 && g.y === 0);
+    zoomOutB.disabled = g.z <= ZMIN + 1e-6;
+    zoomInB.disabled = g.z >= ZMAX - 1e-6;
+  }
+  const zoomBy = (f) => { const g = Zs(); zoomTo(g, g.z * f, view.w / 2, view.h / 2); };
+  zoomInB.addEventListener('click', () => zoomBy(1.25));
+  zoomOutB.addEventListener('click', () => zoomBy(1 / 1.25));
+  zoomPct.addEventListener('click', () => { const g = Zs(); g.z = 1; g.x = 0; g.y = 0; viewChanged(); });
 
   /* ---------- 立體視角的拖曳 ---------- */
   function moveObject(wx, wy, withTip) {                       // wx：物體在主軸上的 X 座標，wy：頂端高度
@@ -997,13 +1127,13 @@
 
   // 投影視窗拖曳
   function clampPip() {
-    const hw = view.w / (2 * view.s), hh = view.h / (2 * view.s);
+    const hw = view.w / (2 * view.s0), hh = view.h / (2 * view.s0);
     S.pip.x = clamp(S.pip.x, -hw, hw - PIP_W);
     S.pip.y = clamp(S.pip.y, -hh, hh - PIP_H);
   }
   let pipDrag = null;
   pipEl.addEventListener('pointerdown', (e) => {
-    const p = toWorld(e);
+    const p = toBase(e);
     pipDrag = { dx: p.x - S.pip.x, dy: -p.y - S.pip.y };
     pipEl.setPointerCapture(e.pointerId);
     pipEl.classList.add('dragging');
@@ -1011,7 +1141,7 @@
   });
   pipEl.addEventListener('pointermove', (e) => {
     if (!pipDrag) return;
-    const p = toWorld(e);
+    const p = toBase(e);
     S.pip.x = p.x - pipDrag.dx;
     S.pip.y = -p.y - pipDrag.dy;
     clampPip();
@@ -1027,6 +1157,7 @@
     $('#app').dataset.orient = S.face;
     cv.classList.toggle('can-grab', S.tab === '3d');
     syncCamUI();
+    updateZoomUI();
     document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
     document.querySelectorAll('[data-type]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.type === S.type)));
     document.querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.side) === S.side)));
@@ -1069,7 +1200,9 @@
     view.w = Math.max(1, stage.clientWidth);
     view.h = Math.max(1, stage.clientHeight);
     view.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    view.s = Math.min(view.w / WORLD_W, view.h / WORLD_H);   // 等比縮放，世界座標 1000 × 600 完整可見
+    view.s0 = Math.min(view.w / WORLD_W, view.h / WORLD_H);  // 基準比例：世界座標 1000 × 600 完整可見
+    clampView(S.zoom.d2); clampView(S.zoom.d3);
+    syncView(); updateZoomUI();
     cv.width = Math.round(view.w * view.dpr);
     cv.height = Math.round(view.h * view.dpr);
     clampPip();
