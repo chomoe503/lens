@@ -69,7 +69,7 @@
   h1 { margin: 0; display: flex; align-items: center; gap: 0.714rem; font-size: 1.286rem; font-weight: 700; letter-spacing: .02em; }
   h1 svg { width: 1.571rem; height: 1.571rem; stroke: var(--accent); fill: var(--accent-soft); stroke-width: 1.8; }
 
-  .tabs { display: flex; gap: 0.143rem; padding: 0.214rem; background: var(--panel-2); border-radius: 0.571rem; flex: 1 1 20rem; max-width: 28.571rem; }
+  .tabs { display: flex; gap: 0.143rem; padding: 0.214rem; background: var(--panel-2); border-radius: 0.571rem; flex: 1 1 20rem; max-width: 36rem; }
   .tabs button, .seg button {
     flex: 1; appearance: none; border: 0; background: transparent; color: var(--muted);
     font-size: 1rem; font-weight: 500; padding: 0.571rem 0.714rem; border-radius: 0.429rem; cursor: pointer; white-space: nowrap;
@@ -108,8 +108,9 @@
   .readout { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.429rem 0.857rem; padding-top: 1rem; border-top: 1px solid var(--line); }
   .readout dt { color: var(--muted); }
   .readout dd { margin: 0; text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-  .readout .adv { display: none; }
+  .readout .adv, .readout .ltr { display: none; }
   .app[data-mode="advanced"] .readout .adv { display: block; }
+  .app[data-mode="abc"] .readout .ltr, .app[data-mode="advanced"] .readout .ltr, .app[data-mode="3d"] .readout .ltr { display: block; }
 
   .legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.429rem; font-size: 0.929rem; }
   .legend li { display: flex; align-items: center; gap: 0.571rem; }
@@ -117,16 +118,28 @@
   .legend span { margin-left: auto; font: 700 0.929rem Arial, Helvetica, sans-serif; color: var(--c); }
   .note { margin: 0.571rem 0 0; font-size: 0.857rem; color: var(--muted); }
 
+  .legend-block { padding-top: 1rem; border-top: 1px solid var(--line); }
+  .only-3d { display: none; }
+  .app[data-mode="3d"] .only-3d { display: block; }
+  .app[data-mode="3d"] .no-3d { display: none; }
+  .slider { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 3rem; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .slider input { width: 100%; margin: 0; accent-color: var(--accent); }
+  .slider output { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+  .hint-front { display: none; }
+  .app[data-orient="front"] .hint-side { display: none; }
+  .app[data-orient="front"] .hint-front { display: block; }
+
   .only-adv, .only-letters { display: none; }
   .app[data-mode="advanced"] .only-adv { display: block; }
-  .app[data-mode="abc"] .only-letters, .app[data-mode="advanced"] .only-letters { display: block; }
+  .app[data-mode="abc"] .only-letters, .app[data-mode="advanced"] .only-letters, .app[data-mode="3d"] .only-letters { display: block; }
   .app[data-mode="advanced"] .only-main { display: none; }
 
   .tips { display: none; margin: 0; padding-left: 1.286rem; color: var(--muted); font-size: 0.929rem; }
   .tips li + li { margin-top: 0.286rem; }
   .app[data-mode="basic"] .tips[data-for="basic"],
   .app[data-mode="abc"] .tips[data-for="abc"],
-  .app[data-mode="advanced"] .tips[data-for="advanced"] { display: block; }
+  .app[data-mode="advanced"] .tips[data-for="advanced"],
+  .app[data-mode="3d"] .tips[data-for="3d"] { display: block; }
 
   .stage { position: relative; min-width: 0; min-height: 0; background: var(--cv-bg); border: 1px solid var(--line); border-radius: 0.571rem; overflow: hidden; }
   #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
@@ -163,7 +176,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
-<div class="app" id="app" data-mode="basic">
+<div class="app" id="app" data-mode="basic" data-orient="side">
   <header class="top">
     <h1>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c6 6 6 14 0 20C6 16 6 8 12 2z"/></svg>
@@ -173,6 +186,7 @@
       <button type="button" role="tab" data-tab="basic" aria-selected="true">基本箭頭</button>
       <button type="button" role="tab" data-tab="abc" aria-selected="false">字母區分</button>
       <button type="button" role="tab" data-tab="advanced" aria-selected="false">紙屏投影</button>
+      <button type="button" role="tab" data-tab="3d" aria-selected="false">立體視角</button>
     </div>
   </header>
 
@@ -205,11 +219,39 @@
         </div>
       </div>
 
-      <label class="switch only-main"><input type="checkbox" id="inf"> 物體在無窮遠</label>
+      <label class="switch only-main no-3d"><input type="checkbox" id="inf"> 物體在無窮遠</label>
+
+      <div class="only-letters">
+        <span class="label" id="lbl-face">字母擺放</span>
+        <div class="seg" role="group" aria-labelledby="lbl-face">
+          <button type="button" data-face="side" aria-pressed="true">側面</button>
+          <button type="button" data-face="front" aria-pressed="false">正面</button>
+        </div>
+        <p class="note hint-side">字母平行於主軸，畫在紙面上，沿主軸有前後。</p>
+        <p class="note hint-front">字母垂直於主軸，正對元件。</p>
+      </div>
+
+      <div class="only-3d">
+        <span class="label">鏡頭</span>
+        <label class="slider"><span>轉角</span><input type="range" id="camYaw" min="0" max="85" step="1" value="45"><output id="camYawV" for="camYaw">45°</output></label>
+        <label class="slider"><span>俯角</span><input type="range" id="camPitch" min="0" max="60" step="1" value="20"><output id="camPitchV" for="camPitch">20°</output></label>
+        <button type="button" class="btn" id="camFlip">換到另一側看</button>
+        <p class="note">拖曳空白處也可以轉動視角。</p>
+      </div>
 
       <div class="only-adv"><button type="button" class="btn" id="focusBtn">紙屏移到像的位置</button></div>
 
-      <div class="only-letters">
+      <dl class="readout" aria-live="polite">
+        <dt>物距</dt><dd id="rd-p"></dd>
+        <dt>焦距</dt><dd id="rd-f"></dd>
+        <dt>像距</dt><dd id="rd-q"></dd>
+        <dt>放大率</dt><dd id="rd-m"></dd>
+        <dt>像的性質</dt><dd id="rd-n"></dd>
+        <dt class="ltr">字母變化</dt><dd class="ltr" id="rd-l"></dd>
+        <dt class="adv">紙屏距離</dt><dd class="adv" id="rd-s"></dd>
+      </dl>
+
+      <div class="only-letters legend-block">
         <span class="label">物體位置與字母</span>
         <ul class="legend">
           <li><i style="--c: var(--st-out)"></i>2F 之外<span style="--c: var(--st-out)">A</span></li>
@@ -220,15 +262,6 @@
         </ul>
         <p class="note">凹透鏡與凸面鏡一律用箭頭。</p>
       </div>
-
-      <dl class="readout" aria-live="polite">
-        <dt>物距</dt><dd id="rd-p"></dd>
-        <dt>焦距</dt><dd id="rd-f"></dd>
-        <dt>像距</dt><dd id="rd-q"></dd>
-        <dt>放大率</dt><dd id="rd-m"></dd>
-        <dt>像的性質</dt><dd id="rd-n"></dd>
-        <dt class="adv">紙屏距離</dt><dd class="adv" id="rd-s"></dd>
-      </dl>
 
       <ul class="tips" data-for="basic">
         <li>拖曳物體底部，改變物距</li>
@@ -241,6 +274,12 @@
         <li>像的字母會依成像性質翻轉</li>
         <li>拖曳 F 點，改變焦距</li>
         <li>靠近 F 或 2F 會自動吸附</li>
+      </ul>
+      <ul class="tips" data-for="3d">
+        <li>拖曳物體底部，沿主軸前後移動</li>
+        <li>拖曳字母或箭頭頂端，改變高度</li>
+        <li>拖曳 F 點，改變焦距</li>
+        <li>拖曳空白處，轉動視角</li>
       </ul>
       <ul class="tips" data-for="advanced">
         <li>拖曳虛線紙屏，尋找清晰的像</li>
@@ -271,6 +310,8 @@
 
   const S = {
     tab: 'basic', type: 'convex-lens', side: -1, inf: false,
+    cam: { mag: 45, sgn: -1, pitch: 20 },  // 立體視角的鏡頭：轉角、所在側（-1 = -X 側，預設在物體這一側）、俯角
+    face: 'side',                        // 字母擺放：side 側面（平行主軸）／front 正面（垂直主軸）
     p: 250, y: 60, f: 100,
     screen: 250,
     pip: { x: 250, y: -296 },            // 投影視窗左上角（以畫面中心為原點，y 向下）；預設在光軸上方，不蓋住倒立的像
@@ -326,6 +367,21 @@
     return { OUT: P.out, '2F': P.f2, MID: P.mid, IN: P.inn, F: P.f1 }[o.state];
   }
 
+  // 像相對於物體的字母翻轉：v 上下、h 左右
+  // 側面（字母在紙面上、沿主軸有前後）：上下看正倒；左右看沿主軸的前後順序有沒有反向，透鏡不反向、面鏡因為光折返而反向。
+  // 正面（字母垂直主軸，觀察者在物體這一側、字面朝向觀察者）：實像旋轉 180°，虛像不翻。
+  function flips(o) {
+    if (S.inf || o.noImage) return null;
+    const inverted = o.imgY * S.y < 0;
+    if (S.face === 'front') return { v: inverted, h: inverted };
+    return { v: inverted, h: !o.isLens };
+  }
+  function flipText(o) {
+    const fl = flips(o);
+    if (!fl || o.kind === 'arrow') return '—';
+    return (fl.v ? '上下翻' : '上下不翻') + '、' + (fl.h ? '左右翻' : '左右不翻');
+  }
+
   /* ---------- 主題 ---------- */
   function readPalette(el) {
     const cs = getComputedStyle(el);
@@ -379,8 +435,7 @@
       const k = Math.abs(h) / 72;            // Arial 粗體 100px 的大寫字高約 72
       c.scale(1, -1);                        // 先回到文字的正向（y 向下）
       c.font = GLYPH_FONT; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-      const flipX = !!opt.image && !virtual; // 實像是旋轉 180°：上下與左右都翻
-      c.scale((flipX ? -1 : 1) * k, (h < 0 ? -1 : 1) * k);
+      c.scale((opt.flipX ? -1 : 1) * k, (h < 0 ? -1 : 1) * k);   // flipX：左右翻；h 為負：上下翻
       if (virtual) {
         c.strokeStyle = color; c.lineWidth = 4 / k; c.setLineDash([12 / k, 8 / k]);
         c.strokeText(kind, 0, 0);
@@ -488,7 +543,8 @@
       return;
     }
     if (Math.abs(o.imgX) > 1500) return;
-    drawGlyph(c, P, o.kind, o.imgX, o.imgY, color, { virtual: o.virtual, image: true });
+    const fl = flips(o);
+    drawGlyph(c, P, o.kind, o.imgX, o.imgY, color, { virtual: o.virtual, flipX: !!(fl && fl.h) });
     const ly = o.imgY >= 0 ? o.imgY + 26 : o.imgY - 46;
     text(c, o.name, o.imgX, clamp(ly, -hh + 10, hh - 30), { size: fs, color });
   }
@@ -525,7 +581,7 @@
       const d = Math.abs(S.screen - o.imgX);
       blur = Math.min(50 * d / Math.abs(o.imgX), 40);
       const tip = S.y * S.screen / o.objX;      // 過中心的光線打在紙屏上的高度
-      drawGlyph(c, P, o.kind, 0, tip, colorFor(P, o), { image: true });
+      drawGlyph(c, P, o.kind, 0, tip, colorFor(P, o), { flipX: !!(flips(o) || {}).h });
       note = d < 4 ? '對焦清晰' : `離焦 ${(d / CELL).toFixed(1)} 格，像模糊`;
     }
     pcv.style.filter = blur * s > 0.4 ? `blur(${(blur * s).toFixed(2)}px)` : 'none';
@@ -533,7 +589,7 @@
   }
 
   /* ---------- 側欄數值 ---------- */
-  const rd = { p: $('#rd-p'), f: $('#rd-f'), q: $('#rd-q'), m: $('#rd-m'), n: $('#rd-n'), s: $('#rd-s') };
+  const rd = { p: $('#rd-p'), f: $('#rd-f'), q: $('#rd-q'), m: $('#rd-m'), n: $('#rd-n'), l: $('#rd-l'), s: $('#rd-s') };
   const focusBtn = $('#focusBtn');
   const fmt = (v) => (v / CELL).toFixed(1) + ' 格';
 
@@ -547,6 +603,7 @@
       rd.m.textContent = Math.abs(o.m) > 99 ? '極大' : Math.abs(o.m).toFixed(2) + ' 倍';
     }
     rd.n.textContent = o.name;
+    rd.l.textContent = flipText(o);
     rd.s.textContent = fmt(Math.abs(S.screen));
     focusBtn.disabled = !(!S.inf && !o.noImage && !o.virtual && Math.abs(o.imgX) <= 480);
     cv.setAttribute('aria-label', `光學成像示意圖，物距 ${S.inf ? '無窮遠' : fmt(S.p)}，焦距 ${fmt(S.f)}，像：${o.name}`);
@@ -557,6 +614,7 @@
     if (!theme) return;
     const P = theme, c = ctx, { w, h, s, dpr } = view;
     const o = optics();
+    if (S.tab === '3d') { draw3D(o); updateReadout(o); return; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.fillStyle = P.bg; c.fillRect(0, 0, w, h);
     c.setTransform(dpr * s, 0, 0, -dpr * s, dpr * w / 2, dpr * h / 2);
@@ -567,6 +625,258 @@
     drawObjects(c, P, o);
     if (S.tab === 'advanced') { drawScreen(c, P); drawPip(o); }
     updateReadout(o);
+  }
+
+  /* ================= 立體視角（正交投影，Canvas 2D） =================
+     世界座標：X 為主軸（向右），Y 向上，Z 朝向前方觀眾。
+     S.cam.sgn：鏡頭在哪一側（-1 在 -X 側，+1 在 +X 側）；S.cam.mag：轉角（度）；S.cam.pitch：俯角（度）。 */
+  const BOX = { x: 520, yMin: -260, yMax: 260, z: 200 };   // 取景範圍（固定，拖曳時畫面不會跟著縮放）
+  const FLOOR_Y = -215;                                      // 光具座與地板高度
+  const LENS_R = 180;                                        // 元件半徑
+  let G = null;                                              // 目前鏡頭：{ k, cx, cy, r, u, f }
+
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  function camSetup() {
+    const az = S.cam.sgn * S.cam.mag * Math.PI / 180;
+    const th = S.cam.pitch * Math.PI / 180;
+    const pos = [Math.sin(az) * Math.cos(th), Math.sin(th), Math.cos(az) * Math.cos(th)];
+    const f = [-pos[0], -pos[1], -pos[2]];                   // 視線方向
+    let r = [-f[2], 0, f[0]];                                // 螢幕右方
+    const rn = Math.hypot(r[0], r[2]);
+    r = [r[0] / rn, 0, r[2] / rn];
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];   // 螢幕上方
+    const xs = [], ys = [];
+    for (const X of [-BOX.x, BOX.x]) for (const Y of [BOX.yMin, BOX.yMax]) for (const Z of [-BOX.z, BOX.z]) {
+      xs.push(X * r[0] + Y * r[1] + Z * r[2]);
+      ys.push(-(X * u[0] + Y * u[1] + Z * u[2]));
+    }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const k = Math.min(view.w / (x1 - x0), view.h / (y1 - y0)) * 0.94;
+    G = { k, r, u, f, cx: view.w / 2 - k * (x0 + x1) / 2, cy: view.h / 2 - k * (y0 + y1) / 2 };
+    return G;
+  }
+  const P3 = (X, Y, Z) => [G.cx + G.k * (X * G.r[0] + Y * G.r[1] + Z * G.r[2]), G.cy - G.k * (X * G.u[0] + Y * G.u[1] + Z * G.u[2])];
+  const D3 = (X, Y, Z) => X * G.f[0] + Y * G.f[1] + Z * G.f[2];     // 沿視線的深度，越大越遠
+  const fsz = (n) => Math.max(11, Math.min(36, n * G.k));
+  const lw3 = (n) => Math.max(1.4, n * G.k * 0.8);
+
+  /* ---------- 繪圖小工具（螢幕像素座標） ---------- */
+  function line3(a, b, color, w, dash) {
+    const p = P3(a[0], a[1], a[2]), q = P3(b[0], b[1], b[2]), c = ctx;
+    c.beginPath(); c.setLineDash(dash ? [dash, dash * 0.75] : []);
+    c.strokeStyle = color; c.lineWidth = w;
+    c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); c.setLineDash([]);
+  }
+  function path3(pts, close) {
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    if (close) ctx.closePath();
+  }
+  function text3(str, sx, sy, color, size, align) {
+    const c = ctx;
+    c.save(); c.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    c.font = `700 ${size}px ${theme.font}`; c.textAlign = align || 'center'; c.textBaseline = 'alphabetic';
+    c.fillStyle = color; c.fillText(str, sx, sy); c.restore();
+  }
+  const ring3 = (x, R, n = 72) => {
+    const pts = [];
+    for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; pts.push(P3(x, R * Math.cos(t), R * Math.sin(t))); }
+    return pts;
+  };
+  const bez = (p0, c1, p2, n = 24) => {                      // 二次貝茲曲線取樣，回傳 [a, b] 點列
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, m = 1 - t;
+      out.push([m * m * p0[0] + 2 * m * t * c1[0] + t * t * p2[0], m * m * p0[1] + 2 * m * t * c1[1] + t * t * p2[1]]);
+    }
+    return out;
+  };
+  const inPlane = (pts, plane) => pts.map((q) => (plane === 'xy' ? P3(q[0], q[1], 0) : P3(q[0], 0, q[1])));
+
+  /* ---------- 地板、光具座、主軸、F／2F 立柱 ---------- */
+  function drawFloor3D(P) {
+    const c = ctx;
+    c.save();
+    c.globalAlpha = 0.45; c.fillStyle = P.grid;
+    path3([P3(-BOX.x, FLOOR_Y, -BOX.z), P3(BOX.x, FLOOR_Y, -BOX.z), P3(BOX.x, FLOOR_Y, BOX.z), P3(-BOX.x, FLOOR_Y, BOX.z)], true);
+    c.fill();
+    c.globalAlpha = 1; c.strokeStyle = P.axis; c.lineWidth = 1; c.globalAlpha = 0.28; c.beginPath();
+    for (let z = -BOX.z; z <= BOX.z; z += 40) { const a = P3(-BOX.x, FLOOR_Y, z), b = P3(BOX.x, FLOOR_Y, z); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); }
+    for (let x = -BOX.x; x <= BOX.x; x += 40) { const a = P3(x, FLOOR_Y, -BOX.z), b = P3(x, FLOOR_Y, BOX.z); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); }
+    c.stroke();
+    c.restore();
+    // 光具座：一格 = 20 單位，每 5 格一條長刻度並標數字
+    line3([-BOX.x, FLOOR_Y, 0], [BOX.x, FLOOR_Y, 0], P.axis, lw3(3));
+    for (let x = -500; x <= 500; x += 20) {
+      const major = x % 100 === 0, h = major ? 11 : 5;
+      line3([x, FLOOR_Y, -h], [x, FLOOR_Y, h], P.axis, 1.2);
+      if (major) { const p = P3(x, FLOOR_Y, 24); text3(String(Math.abs(x) / 20), p[0], p[1] + 4, P.mark, fsz(13)); }
+    }
+    line3([-BOX.x, 0, 0], [BOX.x, 0, 0], P.axis, 1.6);      // 主軸
+  }
+
+  function drawMarks3D(P) {
+    const c = ctx;
+    [-2 * S.f, -S.f, S.f, 2 * S.f].forEach((x) => {
+      const isF = Math.abs(x) === S.f, p = P3(x, 0, 0);
+      c.save(); c.globalAlpha = 0.5; line3([x, 0, 0], [x, FLOOR_Y, 0], P.mark, 1.2, 5); c.restore();
+      c.fillStyle = P.mark; c.beginPath(); c.arc(p[0], p[1], Math.max(3, (isF ? 5.5 : 4.5) * G.k), 0, Math.PI * 2); c.fill();
+      if (isF) {                                              // 外圈提示 F 點可以拖曳
+        c.save(); c.globalAlpha = 0.45; c.strokeStyle = P.mark; c.lineWidth = 1.5;
+        c.beginPath(); c.arc(p[0], p[1], Math.max(7, 13 * G.k), 0, Math.PI * 2); c.stroke(); c.restore();
+      }
+      text3(isF ? 'F' : '2F', p[0], p[1] + fsz(24) + 2, P.mark, fsz(20));
+    });
+  }
+
+  // 物與像在光具座上的位置標記（讓前後距離好讀）
+  function drawDrops3D(P, o) {
+    const xs = [S.side * S.p];
+    if (!o.noImage && Math.abs(o.imgX) < 1500) xs.push(o.imgX);
+    const c = ctx;
+    xs.forEach((x) => {
+      c.save(); c.globalAlpha = 0.55; line3([x, 0, 0], [x, FLOOR_Y, 0], P.mark, 1.2, 5); c.restore();
+      const p = P3(x, FLOOR_Y, 0);
+      c.fillStyle = P.mark; c.beginPath(); c.arc(p[0], p[1], Math.max(3, 4 * G.k), 0, Math.PI * 2); c.fill();
+    });
+  }
+
+  /* ---------- 透鏡與面鏡：圓盤 + 兩個方向的剖面曲線 ---------- */
+  function drawElement3D(P) {
+    const c = ctx, R = LENS_R, curve = Math.max(10, 50 - S.f * 0.15);
+    c.save();
+    c.lineJoin = 'round';
+    line3([0, -R, 0], [0, FLOOR_Y, 0], P.edge, lw3(3));    // 支架
+    const profiles = [];
+    let rims = [0], closed = true;
+    const isLens = S.type.includes('lens');
+    if (S.type === 'convex-lens') {
+      profiles.push(bez([0, R], [curve, 0], [0, -R]).concat(bez([0, -R], [-curve, 0], [0, R])));
+    } else if (S.type === 'concave-lens') {
+      const e = curve / 2;
+      rims = [-e, e];
+      profiles.push([[-e, R], [e, R]].concat(bez([e, R], [e - 10, 0], [e, -R]), [[-e, -R]], bez([-e, -R], [-e + 10, 0], [-e, R])));
+    } else {
+      const bulge = S.type === 'concave-mirror' ? -S.side : S.side;   // 反射面朝向物體這一側
+      profiles.push(bez([0, R], [bulge * 40, 0], [0, -R]));
+      closed = false;
+    }
+    rims.forEach((x) => {                                    // 圓盤
+      path3(ring3(x, R), true);
+      if (isLens) { c.fillStyle = P.glass; c.fill(); } else { c.save(); c.globalAlpha = 0.12; c.fillStyle = P.edge; c.fill(); c.restore(); }
+      c.strokeStyle = P.edge; c.lineWidth = lw3(2); c.stroke();
+    });
+    c.strokeStyle = P.edge; c.lineWidth = lw3(2);
+    profiles.forEach((pr) => {
+      path3(inPlane(pr, 'xy'), closed); c.stroke();
+      path3(inPlane(pr, 'xz'), closed); c.stroke();
+    });
+    c.restore();
+  }
+
+  /* ---------- 字母與箭頭 ---------- */
+  // 字母是平面：側面＝位於 X–Y 平面（沿主軸），正面＝位於 Y–Z 平面（垂直主軸，字面朝向物體這一側）。
+  // 平面圖形在正交投影下只是仿射變換，所以直接用 fillText 加上變換矩陣繪製。
+  function glyph3(kind, x0, h, color, opt) {
+    opt = opt || {};
+    if (!isFinite(h) || Math.abs(h) < 0.5 || Math.abs(h) > 4000) return;
+    const virtual = !!opt.virtual, c = ctx;
+    if (kind === 'arrow') { arrow3(x0, h, color, virtual); return; }
+    const U = S.face === 'front' ? [0, 0, -S.side] : [1, 0, 0];    // 字的閱讀方向
+    const V = [0, 1, 0], O = [x0, 0, 0], d = view.dpr, k = G.k;
+    c.save();
+    c.setTransform(d * k * dot3(U, G.r), -d * k * dot3(U, G.u), d * k * dot3(V, G.r), -d * k * dot3(V, G.u),
+      d * (G.cx + k * dot3(O, G.r)), d * (G.cy - k * dot3(O, G.u)));
+    c.scale(1, -1);                                         // 回到文字正向（y 向下）
+    c.font = GLYPH_FONT; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    const kk = Math.abs(h) / 72;
+    c.scale((opt.flipX ? -1 : 1) * kk, (h < 0 ? -1 : 1) * kk);
+    if (virtual) {
+      c.strokeStyle = color; c.lineWidth = 4 / kk; c.setLineDash([12 / kk, 8 / kk]);
+      c.strokeText(kind, 0, 0);
+    } else {
+      c.fillStyle = color; c.fillText(kind, 0, 0);
+    }
+    c.restore();
+  }
+
+  // 箭頭是軸對稱的，正面或側面看起來一樣；箭頭頭部在螢幕空間繪製，任何角度都好看
+  function arrow3(x0, h, color, virtual) {
+    const c = ctx, a = P3(x0, 0, 0), b = P3(x0, h, 0);
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+    if (len < 1) return;
+    const ux = dx / len, uy = dy / len, L = Math.min(Math.max(14, 18 * G.k), len * 0.6), W = L * 0.55;
+    const bx = b[0] - ux * L, by = b[1] - uy * L;
+    c.save();
+    c.strokeStyle = color; c.fillStyle = color; c.lineWidth = Math.max(2, 3 * G.k * 0.8); c.lineJoin = 'round';
+    if (virtual) c.setLineDash([Math.max(6, 8 * G.k), Math.max(5, 6 * G.k)]);
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    c.setLineDash([]);
+    c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(bx - uy * W, by + ux * W); c.lineTo(bx + uy * W, by - ux * W); c.closePath();
+    if (virtual) { c.fillStyle = theme.bg; c.fill(); c.stroke(); } else { c.fill(); }
+    c.restore();
+  }
+
+  /* ---------- 主光線（畫在 Z = 0 的平面上，與 2D 版相同） ---------- */
+  function rays3D(P, o) {
+    const w = Math.max(1.8, 2.6 * G.k * 0.8), fx = (o.conv ? o.fwd : -o.fwd) * S.f;
+    const ox = o.objX, oy = S.y;
+    const back = o.virtual ? [o.imgX, o.imgY] : null;
+    const seg = (x1, y1, x2, y2, dashed) => line3([x1, y1, 0], [x2, y2, 0], P.ray, dashed ? Math.max(1.4, 1.5 * G.k) : w, dashed ? Math.max(6, 8 * G.k) : 0);
+    const out = (sx, sy, tx, ty) => {
+      let dx = tx - sx, dy = ty - sy;
+      if (dx !== 0 && Math.sign(dx) !== o.fwd) { dx = -dx; dy = -dy; }
+      const L = Math.hypot(dx, dy);
+      if (!L) return;
+      seg(sx, sy, sx + dx / L * 2000, sy + dy / L * 2000);
+      if (back) seg(sx, sy, back[0], back[1], true);          // 虛像：反向延長線止於像點
+    };
+    seg(ox, oy, 0, oy); out(0, oy, fx, 0);                    // 平行主軸入射 → 過焦點
+    seg(ox, oy, 0, 0); out(0, 0, o.isLens ? -ox : ox, -oy);   // 打到元件中心
+  }
+
+  /* ---------- 整個場景 ---------- */
+  function draw3D(o) {
+    const P = theme, c = ctx;
+    camSetup();
+    c.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    c.fillStyle = P.bg; c.fillRect(0, 0, view.w, view.h);
+    drawFloor3D(P);
+    drawMarks3D(P);
+    drawDrops3D(P, o);
+
+    const color = colorFor(P, o), fl = flips(o);
+    const hasImg = !o.noImage && Math.abs(o.imgX) < 1500;
+    const items = [{ d: 0, fn: () => drawElement3D(P) }];     // 由遠到近依序繪製，近處的蓋住遠處
+    items.push({ d: D3(o.objX, 0, 0), fn: () => glyph3(o.kind, o.objX, S.y, color) });
+    if (hasImg) items.push({ d: D3(o.imgX, 0, 0), fn: () => glyph3(o.kind, o.imgX, o.imgY, color, { virtual: o.virtual, flipX: !!(fl && fl.h) }) });
+    items.sort((a, b) => b.d - a.d).forEach((i) => i.fn());
+
+    rays3D(P, o);
+
+    if (hasImg) {                                              // 像的名稱
+      const p = P3(o.imgX, o.imgY, 0);
+      text3(o.name, p[0], o.imgY >= 0 ? p[1] - 14 : p[1] + fsz(24) + 10, color, fsz(24));
+    }
+    if (o.noImage) {                                           // 物在焦點上：不成像
+      const p = P3(0, 0, 0), s = Math.max(14, 38 * G.k * 0.8);
+      c.save(); c.strokeStyle = P.warn; c.globalAlpha = 0.9; c.lineWidth = Math.max(5, 10 * G.k * 0.8); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(p[0] - s, p[1] - s); c.lineTo(p[0] + s, p[1] + s); c.moveTo(p[0] + s, p[1] - s); c.lineTo(p[0] - s, p[1] + s); c.stroke();
+      c.restore();
+      text3('不成像', p[0], p[1] + s + fsz(24) + 8, P.warn, fsz(24));
+    }
+  }
+
+  /* ---------- 拖曳用：螢幕座標反推世界座標 ---------- */
+  function axisX(sx, sy) {                                     // 投影到主軸上，回傳 X
+    const o = P3(0, 0, 0), a = P3(1, 0, 0), dx = a[0] - o[0], dy = a[1] - o[1];
+    return ((sx - o[0]) * dx + (sy - o[1]) * dy) / (dx * dx + dy * dy);
+  }
+  function planeXY(sx, sy) {                                   // 落在 Z = 0 平面上的 (X, Y)
+    const A = (sx - G.cx) / G.k, B = -(sy - G.cy) / G.k;
+    const rx = G.r[0], ry = G.r[1], ux = G.u[0], uy = G.u[1], det = rx * uy - ry * ux;
+    return [(A * uy - ry * B) / det, (rx * B - A * ux) / det];
   }
 
   /* ---------- 互動 ---------- */
@@ -607,20 +917,22 @@
       if (!S.inf && !o.noImage && !o.virtual && Math.abs(v - o.imgX) < 6) v = o.imgX;   // 靠近像時吸附
       S.screen = v;
     } else {
-      let np = S.side === -1 ? -p.x : p.x;
-      if (Math.abs(np - S.f) < 12) np = S.f;
-      else if (Math.abs(np - 2 * S.f) < 12) np = 2 * S.f;
-      S.p = clamp(np, 20, 480);
-      if (drag.kind === 'tip') {
-        let ny = clamp(p.y, -250, 250);
-        if (Math.abs(ny) < 20) ny = 20 * (Math.sign(ny) || 1);
-        S.y = ny;
-      }
+      moveObject(p.x, p.y, drag.kind === 'tip');
     }
     schedule();
   }
 
   cv.addEventListener('pointerdown', (e) => {
+    if (S.tab === '3d') {
+      const q = px3(e), kind = hit3(q[0], q[1]);
+      let off = [0, 0];                                          // 記下抓取點與目標的偏移，拖曳時物體不會跳到滑鼠位置
+      if (kind === 'base') off = [axisX(q[0], q[1]) - S.side * S.p, 0];
+      else if (kind === 'tip') { const xy = planeXY(q[0], q[1]); off = [xy[0] - S.side * S.p, xy[1] - S.y]; }
+      else if (kind === 'focus') { const X = axisX(q[0], q[1]); off = [X - Math.sign(X) * S.f, 0]; }
+      drag = kind ? { kind, off } : { kind: 'orbit', x0: q[0], y0: q[1], az0: S.cam.sgn * S.cam.mag, pitch0: S.cam.pitch };
+      cv.setPointerCapture(e.pointerId); cv.classList.add('grabbing'); e.preventDefault();
+      return;
+    }
     const p = toWorld(e), kind = hit(p.x, p.y);
     if (!kind) return;
     drag = { kind };
@@ -629,6 +941,7 @@
     e.preventDefault();
   });
   cv.addEventListener('pointermove', (e) => {
+    if (S.tab === '3d') { if (drag) applyDrag3(px3(e)); return; }
     const p = toWorld(e);
     if (drag) applyDrag(p);
     else cv.classList.toggle('can-grab', !!hit(p.x, p.y));
@@ -636,6 +949,51 @@
   const endDrag = () => { drag = null; cv.classList.remove('grabbing'); };
   cv.addEventListener('pointerup', endDrag);
   cv.addEventListener('pointercancel', endDrag);
+
+  /* ---------- 立體視角的拖曳 ---------- */
+  function moveObject(wx, wy, withTip) {                       // wx：物體在主軸上的 X 座標，wy：頂端高度
+    let np = S.side === -1 ? -wx : wx;
+    if (Math.abs(np - S.f) < 12) np = S.f;
+    else if (Math.abs(np - 2 * S.f) < 12) np = 2 * S.f;
+    S.p = clamp(np, 20, 480);
+    if (withTip) {
+      let ny = clamp(wy, -250, 250);
+      if (Math.abs(ny) < 20) ny = 20 * (Math.sign(ny) || 1);
+      S.y = ny;
+    }
+  }
+  const px3 = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  function hit3(sx, sy) {                                      // 落在多個目標內時取最近的
+    camSetup();
+    const best = { kind: null, d: Infinity };
+    const test = (kind, X, Y) => { const p = P3(X, Y, 0), d = Math.hypot(sx - p[0], sy - p[1]); if (d < 28 && d < best.d) { best.kind = kind; best.d = d; } };
+    test('focus', S.f, 0); test('focus', -S.f, 0);
+    test('base', S.side * S.p, 0);
+    test('tip', S.side * S.p, S.y);
+    return best.kind;
+  }
+  function applyDrag3(q) {
+    camSetup();
+    if (drag.kind === 'focus') {
+      S.f = clamp(Math.abs(axisX(q[0], q[1]) - drag.off[0]), 30, 240);
+    } else if (drag.kind === 'base') {
+      moveObject(axisX(q[0], q[1]) - drag.off[0], 0, false);
+    } else if (drag.kind === 'tip') {
+      const xy = planeXY(q[0], q[1]);
+      moveObject(xy[0] - drag.off[0], xy[1] - drag.off[1], true);
+    } else {                                                   // 轉動視角：往右拖，鏡頭往左繞
+      const az = clamp(drag.az0 - (q[0] - drag.x0) * 0.3, -85, 85);
+      S.cam.mag = Math.abs(az);
+      if (az !== 0) S.cam.sgn = Math.sign(az);
+      S.cam.pitch = clamp(drag.pitch0 + (q[1] - drag.y0) * 0.3, 0, 60);
+      syncCamUI();
+    }
+    schedule();
+  }
+  function syncCamUI() {
+    $('#camYaw').value = S.cam.mag; $('#camYawV').textContent = Math.round(S.cam.mag) + '°';
+    $('#camPitch').value = S.cam.pitch; $('#camPitchV').textContent = Math.round(S.cam.pitch) + '°';
+  }
 
   // 投影視窗拖曳
   function clampPip() {
@@ -666,9 +1024,13 @@
   /* ---------- 控制項 ---------- */
   function renderUI() {
     $('#app').dataset.mode = S.tab;
+    $('#app').dataset.orient = S.face;
+    cv.classList.toggle('can-grab', S.tab === '3d');
+    syncCamUI();
     document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
     document.querySelectorAll('[data-type]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.type === S.type)));
     document.querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.side) === S.side)));
+    document.querySelectorAll('button[data-face]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.face === S.face)));
     $('#inf').checked = S.inf;
     pipEl.hidden = S.tab !== 'advanced';
   }
@@ -676,6 +1038,7 @@
   document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
     S.tab = b.dataset.tab;
     if (S.tab === 'advanced') { S.type = 'convex-lens'; S.inf = false; }   // 紙屏投影只支援凸透鏡
+    if (S.tab === '3d') S.inf = false;                                      // 立體視角不含無窮遠物體
     renderUI(); draw();
   }));
   document.querySelectorAll('[data-type]').forEach((b) => b.addEventListener('click', () => {
@@ -686,8 +1049,15 @@
     if (v === S.side) return;
     S.side = v;
     S.screen = -S.screen;                                                   // 紙屏跟著換到像的那一側
+    S.cam.sgn = -S.cam.sgn;                                                 // 鏡頭也留在物體這一側
     renderUI(); draw();
   }));
+  document.querySelectorAll('button[data-face]').forEach((b) => b.addEventListener('click', () => {
+    S.face = b.dataset.face; renderUI(); draw();
+  }));
+  $('#camYaw').addEventListener('input', (e) => { S.cam.mag = Number(e.target.value); syncCamUI(); draw(); });
+  $('#camPitch').addEventListener('input', (e) => { S.cam.pitch = Number(e.target.value); syncCamUI(); draw(); });
+  $('#camFlip').addEventListener('click', () => { S.cam.sgn = -S.cam.sgn; draw(); });
   $('#inf').addEventListener('change', (e) => { S.inf = e.target.checked; draw(); });
   focusBtn.addEventListener('click', () => {
     const o = optics();
